@@ -47,6 +47,7 @@ $RTC.identify_theme = function () {
     /* Not sure, is it needed at all
        it's meant for updating comment_list_el, comment_el, list_container_class, children_class variables
        according to current Comments Walker. By default, values are set for default walker.
+       Maybe those values should come from WP.
     */
     $RTC.comment_list_el = '#comments';
     $RTC.comment_el = 'li#comment-';
@@ -75,7 +76,7 @@ $RTC.addComment = function (comment) {
             me.innerHTML = comment.html;
         } else if (parent) {
             // exists parent, add to it
-            if (parent.is_root && $RTC.order === 'newontop') {
+            if (parent.is_root && $RTC.order === 'desc') {
                 parent.container.prepend(comment.html);
             } else {
                 parent.container.append(comment.html);
@@ -97,8 +98,7 @@ $RTC.getComments = function () {
         'rtc_bookmark': $RTC.bookmark,
         'postid': $RTC.postid
     },
-        i,
-        keep_going = false;
+        i;
     jQuery.ajax({
         url: $RTC.ajaxurl,
         data: send,
@@ -109,27 +109,23 @@ $RTC.getComments = function () {
             $RTC.bookmark = response.bookmark;
             if (response.status === 200) {
                 // populate comments
-                console.debug('populate comments');
                 // approve|hold|spam|trash
                 for (i = 0; i < response.comments.length; i++) {
                     $RTC.addComment(response.comments[i]);
                 }
-                keep_going = true;
             } else if (response.status === 304) {
                 // console.debug('contents not modified, do nothing');
-                keep_going = true;
             } else {
                 // not comments context, disable loop
-                console.debug(response);
-                keep_going = false;
+                return false;
             }
         },
         error: function (jqXHR, textStatus, errorThrown) {
             console.debug(textStatus + ': ' + errorThrown);
-            keep_going = false;
+            return false;
         }
     });
-    return keep_going;
+    return true;
 };
 
 $RTC.init = function () {
@@ -137,7 +133,6 @@ $RTC.init = function () {
     if ($RTC.refresh_interval > 100) {
         $RTC.identify_theme();
         interval = setInterval(function () {
-            console.log('alive');
             success = $RTC.getComments();
             if (!success) {
                 clearInterval(interval);

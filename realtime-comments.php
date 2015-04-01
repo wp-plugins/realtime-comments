@@ -18,15 +18,20 @@ if(!defined('ABSPATH')) {
   die('You are not allowed to call this page directly.');
 }
 
+require_once(plugin_dir_path(__FILE__).'rtc-page-selector-walker.class.php');
+
+
 class RealTimeComments {
     private $refresh = 2000;
     private $anim = 1;
-    private $order = 'newontop'; // newonbottom
+    private $order = false; // {'asc'|'desc'|false}
     private $now = 0;
     private $old_wp = false;
 
-    private $default_refresh=1000;
-    private $default_anim=1;
+    private $default_refresh = 1000;
+    private $default_anim = 1;
+    private $post_types = array();
+    private $selected_pages = array();
 
     private $refresh_options=array(
         500  => '0.5 seconds',
@@ -39,6 +44,12 @@ class RealTimeComments {
         30000=> '30 seconds',
         60000=> '1 minute',
         );
+
+    private $order_options=array(       // get_option('comment_order') {asc|desc}
+        '' => 'as general setting',
+        'asc' => 'to bottom',
+        'desc' => 'to top',
+    );
 
     public function __construct() {
         global $wp_version;
@@ -74,6 +85,8 @@ class RealTimeComments {
             if (isset($values['refresh'])) $this->refresh = $values['refresh'];
             if (isset($values['anim'])) $this->anim = $values['anim'];
             if (isset($values['order'])) $this->order = $values['order'];
+            if (is_array($values['selected_pages'])) $this->selected_pages = $values['selected_pages'];
+            if (is_array($values['post_types'])) $this->post_types = $values['post_types'];
         } 
         $this->now=time();
     }
@@ -96,7 +109,7 @@ class RealTimeComments {
     
     public function admin_page() { 
         // add_menu_page( $page_title, $menu_title, $capability, $menu_slug, $function, $icon_url, $position );
-        add_menu_page('Realtime Comments', 'Realtime Comments', 'administrator', 'rtc_admin_menu', array($this, 'create_menu_page'), '', '29.90198237');
+        add_menu_page('Realtime Comments', 'Realtime Comments', 'administrator', 'rtc_admin_menu', array($this, 'create_menu_page'), '', '25.000154');
 
     }
 
@@ -122,6 +135,11 @@ class RealTimeComments {
 
         // add_settings_field( $id, $title, $callback, $page, $section, $args );
         add_settings_field('refresh_field', 'Choose refresh frequency', array($this, 'refresh_input'), 'rtc_menu', 'rtc_main_settings'); 
+
+        add_settings_field('order_field', 'New comments appear', array($this, 'order_input'), 'rtc_menu', 'rtc_main_settings');
+
+        add_settings_field('limit_show', 'Use Realtime Comments for', array($this, 'select_pages'), 'rtc_menu', 'rtc_main_settings');
+
         // add_settings_field('anim_field', 'New comments flash', array($this, 'anim_input'), 'rtc_menu', 'rtc_main_settings'); 
     } 
 
@@ -132,22 +150,59 @@ class RealTimeComments {
     function validate_my_option($input) { 
         // validate entered value
         $output=array();
+        var_dump($input);
         if(isset($input['anim'])) $output['anim']=1; else $output['anim']=0;
         if(isset($input['refresh']) && array_key_exists(intval($input['refresh']), $this->refresh_options)) {
             $output['refresh']=intval($input['refresh']);
         } else {
             $output['refresh']=$this->default_refresh;
         }
+        if(isset($input['order'])) {
+            $output['order']=$input['order'];
+        } 
+        if(is_array($input['post_types'])) {
+            $output['post_types']=$input['post_types'];
+        } else {
+            $output['post_types']=array();
+        }
+        if(is_array($input['selected_pages'])) {
+            $output['selected_pages']=$input['selected_pages'];
+        } else {
+            $output['selected_pages']=array();
+        }
         return $output; 
     } 
 
     function refresh_input() { 
-        echo '<select name="rtc-settings[refresh]">'.PHP_EOL;
+        echo '<select name="rtc-settings[refresh]">'."\n";
         foreach($this->refresh_options as $value=>$text) {
-            echo '     <option value="'.$value.'" '.selected($this->refresh, $value, false).'>'.$text.'</option>'.PHP_EOL;
+            echo '     <option value="'.$value.'" '.selected($this->refresh, $value, false).'>'.$text.'</option>'."\n";
         }
-        echo '</select>'.PHP_EOL;
+        echo '</select>'."\n";
     } 
+
+
+    function order_input() {
+        echo '<select name="rtc-settings[order]">'."\n";
+        foreach($this->order_options as $value=>$text) {
+            echo '    <option value="'.$value.'" '.selected($this->order, $value, false).'>'.$text.'</option>'."\n";
+        }
+        echo '</select>'."\n";
+    }
+
+    function select_pages() {
+        echo '<input type="checkbox" name="rtc-settings[post_types][page]" value="1" '.checked(true, isset($this->post_types['page']), false).'>all Pages<br>';
+        echo '<input type="checkbox" name="rtc-settings[post_types][post]" value="1" '.checked(true, isset($this->post_types['post']), false).'>all Posts<br>';
+        echo 'and/or on following pages:<br>';
+        echo '<select name="rtc-settings[selected_pages][]" multiple="multiple" size="8">';
+            $walker = new Rtc_Page_Selector_Walker($this->selected_pages);
+            $options_list= wp_list_pages( array('title_li'=>'', 'post-type'=>'page','sort_column' => 'menu_order, post_title', 'echo'=>0, 'walker'=>$walker));
+            $options_list=str_replace(array('</li>', "</ul>\n"), '', $options_list);
+            $options_list=str_replace("<ul class='children'>\n", '    ', $options_list);
+            echo $options_list;
+        echo '</select>';
+
+    }
 
     function anim_input() { 
         ?><input name="rtc-settings[anim]" type="checkbox" value="1" <?=($this->anim ? 'checked="1"':'') ?>><?php
@@ -167,17 +222,23 @@ class RealTimeComments {
 
     public function enqueue_style_n_script( $hook_suffix ) {
         global $post;
-        wp_enqueue_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, false );
 
-        $data = array(
-            'ajaxurl' => parse_url(admin_url('admin-ajax.php'), PHP_URL_PATH),
-            'nonce' => wp_create_nonce('realtime-comments'),
-            'refresh_interval' => $this->refresh,
-            'bookmark' => $this->now,
-            'postid' => $post->ID,
-            'order' =>$this->order
-        );
-        wp_localize_script('rtc-plugin', '$RTC', $data);
+        if (
+            (isset($post->ID) && in_array(get_post_type($post->ID), array_keys($this->post_types))) ||
+            (isset($post->ID) && in_array($post->ID, $this->selected_pages))
+            ) {
+            wp_enqueue_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, false );
+
+            $data = array(
+                'ajaxurl' => parse_url(admin_url('admin-ajax.php'), PHP_URL_PATH),
+                'nonce' => wp_create_nonce('realtime-comments'),
+                'refresh_interval' => $this->refresh,
+                'bookmark' => $this->now,
+                'postid' => $post->ID,
+                'order' => ($this->order ? $this->order : get_option('comment_order'))
+            );
+            wp_localize_script('rtc-plugin', '$RTC', $data);
+        }
     }
 
     private function get_comments_wp30($postid, $status, $bookmark) {
@@ -296,12 +357,17 @@ class RealTimeComments {
         if ( ! wp_next_scheduled( 'realtime_comments_cleanup' ) ) {
           wp_schedule_event( time(), 'hourly', 'realtime_comments_cleanup' );
         }    
+        $values=get_option('rtc-settings');
+        if(!isset($values['post_types'])) {
+            $values['post_types'] = array('post' => '1', 'page' => '1');
+        }
+        update_option('rtc-settings', $values);
     }
 
     public static function uninstall() {
         global $wpdb;
         // clean up. delete options and commentmeta
-        delete_option( 'rtc-settings' );
+        // delete_option( 'rtc-settings' );
         $wpdb->query("DELETE FROM $wpdb->commentmeta WHERE meta_key = 'rtc_last_modified'");
     }
 
