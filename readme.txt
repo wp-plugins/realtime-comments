@@ -3,8 +3,8 @@ Contributors: Eero Hermlin
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=W47NB7K49TJNE
 Tags: comments, update, real time, real-time, realtime, update, automatic, ajax, interactive, online, chat
 Requires at least: 3.0
-Tested up to: 4.0
-Stable tag: 0.5
+Tested up to: 4.1.1
+Stable tag: 0.6
 License: GPLv2
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -30,6 +30,9 @@ Administrator can choose update frequency.
 
 == Changelog ==
 
+= 0.6 =
+* Added: option to select pages, where Realtime Comments will be activated
+* Added: option to select new comments appearing order
 
 = 0.5 =
 * Initial public release
