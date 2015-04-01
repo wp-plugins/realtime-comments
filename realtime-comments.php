@@ -6,7 +6,7 @@
  * Author: Eero Hermlin
  * Author URI: http://eero.hermlin.era.ee/
  * Requires at least: 3.0
- * Tested up to: 4.0
+ * Tested up to: 4.1.1
  * License: GPLv2
  */
 
