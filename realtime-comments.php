@@ -82,11 +82,11 @@ class RealTimeComments {
 
         if(is_array($values)) {
             // user has chosen own values
-            if (isset($values['refresh'])) $this->refresh = $values['refresh'];
+            if (isset($values['refresh'])) $this->refresh = $values['refresh']; 
             if (isset($values['anim'])) $this->anim = $values['anim'];
             if (isset($values['order'])) $this->order = $values['order'];
-            if (is_array($values['selected_pages'])) $this->selected_pages = $values['selected_pages'];
-            if (is_array($values['post_types'])) $this->post_types = $values['post_types'];
+            if (isset($values['selected_pages']) && is_array($values['selected_pages'])) $this->selected_pages = $values['selected_pages'];
+            if (isset($values['post_types']) && is_array($values['post_types'])) $this->post_types = $values['post_types'];
         } 
         $this->now=time();
     }
@@ -194,7 +194,7 @@ class RealTimeComments {
         echo '<input type="checkbox" name="rtc-settings[post_types][page]" value="1" '.checked(true, isset($this->post_types['page']), false).'>all Pages<br>';
         echo '<input type="checkbox" name="rtc-settings[post_types][post]" value="1" '.checked(true, isset($this->post_types['post']), false).'>all Posts<br>';
         echo 'and/or on following pages:<br>';
-        echo '<select name="rtc-settings[selected_pages][]" multiple="multiple" size="8">';
+        echo '<select name="rtc-settings[selected_pages][]" multiple="multiple" size="8" style="height: 14em">';
             $walker = new Rtc_Page_Selector_Walker($this->selected_pages);
             $options_list= wp_list_pages( array('title_li'=>'', 'post-type'=>'page','sort_column' => 'menu_order, post_title', 'echo'=>0, 'walker'=>$walker));
             $options_list=str_replace(array('</li>', "</ul>\n"), '', $options_list);
@@ -360,6 +360,9 @@ class RealTimeComments {
         $values=get_option('rtc-settings');
         if(!isset($values['post_types'])) {
             $values['post_types'] = array('post' => '1', 'page' => '1');
+        }
+        if(!isset($values['selected_pages'])) {
+            $values['selected_pages'] = array();
         }
         update_option('rtc-settings', $values);
     }
