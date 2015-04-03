@@ -28,4 +28,12 @@ class Rtc_Page_Selector_Walker extends Walker_page {
         }
         $output.= '>'.$indent.$item->post_title.'</option>';
     }
+
+    public static function get_pages_selection($selected_pages) {
+        $walker = new self ($selected_pages);
+        $pages = wp_list_pages( array('title_li'=>'', 'post-type'=>'page','sort_column' => 'menu_order, post_title', 'echo'=>0, 'walker'=>$walker));
+        $pages=str_replace(array('</li>', "</ul>\n"), '', $pages);
+        $pages=str_replace("<ul class='children'>\n", '    ', $pages);
+        return $pages;
+    }
 }

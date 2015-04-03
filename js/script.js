@@ -31,28 +31,17 @@ $RTC.get_parent_container = function (parent_id) {
             // search default root container
             parent_container = jQuery($RTC.comment_list_el + ' .' + $RTC.list_container_class);
         } else if (jQuery($RTC.comment_list_el + " .commentlist").length > 0) {
-            // search root container created by old WP walker
+            // Fallback: search root container created by old WP walker
             parent_container = jQuery($RTC.comment_list_el + " .commentlist");
         } else {
             // create root container
             // if #comments is not visible, does nothing
-            parent_container = jQuery($RTC.comment_list_el).prepend('<ol class="' + $RTC.list_container_class + '"></ol>');
+            jQuery($RTC.comment_list_el).prepend('<ol class="' + $RTC.list_container_class + '"></ol>');
+            parent_container = jQuery($RTC.comment_list_el + ' .' + $RTC.list_container_class);
         }
         is_root = true;
     }
     return {container: parent_container, is_root: is_root};
-};
-
-$RTC.identify_theme = function () {
-    /* Not sure, is it needed at all
-       it's meant for updating comment_list_el, comment_el, list_container_class, children_class variables
-       according to current Comments Walker. By default, values are set for default walker.
-       Maybe those values should come from WP.
-    */
-    $RTC.comment_list_el = '#comments';
-    $RTC.comment_el = 'li#comment-';
-    $RTC.list_container_class = 'comment-list';
-    $RTC.children_class = 'children';
 };
 
 $RTC.get_comment_container = function (comment_id) {
@@ -61,7 +50,7 @@ $RTC.get_comment_container = function (comment_id) {
         // new themes
         container = jQuery($RTC.comment_el + comment_id);
     } else if (jQuery("li#li-comment-" + comment_id).length) {
-        // old themes
+        // Fallback for old themes
         container = jQuery("li#li-comment-" + comment_id);
     }
     return container;
@@ -72,8 +61,8 @@ $RTC.addComment = function (comment) {
         me = $RTC.get_comment_container(comment.id);
     if (comment.approved === '1' || comment.approved === 'approve') {
         if (me) {
-            // @todo: it already exists, update article content
-            me.innerHTML = comment.html;
+            // it already exists, update article content
+            // me.innerHTML = comment.html;
         } else if (parent) {
             // exists parent, add to it
             if (parent.is_root && $RTC.order === 'desc') {
@@ -96,17 +85,23 @@ $RTC.getComments = function () {
     var send = {
         'action': 'rtc_update',
         'rtc_bookmark': $RTC.bookmark,
-        'postid': $RTC.postid
+        'postid': $RTC.postid,
+        'max_c_id': $RTC.max_c_id
     },
         i;
     jQuery.ajax({
         url: $RTC.ajaxurl,
         data: send,
         dataType: 'json',
+        // dataType: 'text',
         type: 'post',
         cache: false,
         success: function (response) {
+            console.debug(response);
             $RTC.bookmark = response.bookmark;
+            if (typeof response.max_c_id === 'string') {
+                $RTC.max_c_id = response.max_c_id;
+            }
             if (response.status === 200) {
                 // populate comments
                 // approve|hold|spam|trash
@@ -130,8 +125,8 @@ $RTC.getComments = function () {
 
 $RTC.init = function () {
     var success = true, interval;
+    $RTC.refresh_interval = parseInt($RTC.refresh_interval, 10);
     if ($RTC.refresh_interval > 100) {
-        $RTC.identify_theme();
         interval = setInterval(function () {
             success = $RTC.getComments();
             if (!success) {
