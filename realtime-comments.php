@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Realtime Comments
  * New accepted comments from all users are updated in pages real-time, without the need to refresh the page. Allows comments section work interactively, like a chatroom. Pure WP plugin, no third party involvement, no account registration or third party application needed. Comments re-classified as trash, spam, or unapproved will be dynamically removed from users screen. 
- * Version: 0.6
+ * Version: 0.7
  * Author: Eero Hermlin
  * Author URI: http://eero.hermlin.era.ee/
  * Requires at least: 3.0
@@ -11,7 +11,7 @@
  */
 
 if(!defined('REALTIMECOMMENTS_VERSION')) {
-    define('REALTIMECOMMENTS_VERSION', '0.6');
+    define('REALTIMECOMMENTS_VERSION', '0.7');
 }
 
 if(!defined('ABSPATH')) {
@@ -106,6 +106,12 @@ class RealTimeComments {
             if (isset($values['selected_pages']) && is_array($values['selected_pages'])) $this->selected_pages = $values['selected_pages'];
             if (isset($values['post_types']) && is_array($values['post_types'])) $this->post_types = $values['post_types'];
         } 
+
+
+        // Comments per page: get_option('comments_per_page') (counting top-level comments)
+        // Comments order: get_option('comment_order') {asc|desc}
+        // pagination links https://codex.wordpress.org/Template_Tags/paginate_comments_links
+        // 
     }
 
     /* 
@@ -279,6 +285,18 @@ class RealTimeComments {
             ) {
             wp_enqueue_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, false );
 
+            $page_comments = get_option('page_comments');
+            /*
+            $page = get_query_var('cpage');
+            $nextpage = intval($page) + 1;
+            $max_page = get_comment_pages_count();
+            if ( empty($max_page) )
+                $max_page = $wp_query->max_num_comment_pages;
+            if ( empty($max_page) )
+                global $wp_query;
+                $max_page = $wp_query->max_num_comment_pages;
+            */
+
             $data = array(
                 'ajaxurl' => parse_url(admin_url('admin-ajax.php'), PHP_URL_PATH),
                 'nonce' => wp_create_nonce('realtime-comments'),
@@ -287,10 +305,16 @@ class RealTimeComments {
                 'max_c_id' => $this->get_max_comment_id($post->ID),
                 'postid' => $post->ID,
                 'order' => ($this->order ? $this->order : get_option('comment_order')),
+                'comments_per_page' => ($page_comments ? get_option('comments_per_page') : 0),
                 'comment_list_el' => '#comments',
-                'comment_el' => 'li#comment-',
-                'list_container_class' => 'comment-list',
+                'comment_list_tag' => 'ol',
+                'comment_list_class' => null, // 'comment-list',
+                'comment_tag' => 'li',
+                'comment_id_prefix' => '#comment-',
                 'children_class' => 'children',
+                'tambov' => 5,
+                'is_last_page' => (($page_comments && is_numeric(get_query_var('cpage'))) ? '0' : '1'),
+                // 'max_page' => $max_page,
             );
             wp_localize_script('rtc-plugin', '$RTC', $data);
         }
