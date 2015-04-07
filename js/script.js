@@ -81,7 +81,6 @@ $RTC.addComment = function (comment) {
             // me.innerHTML = comment.html;
         } else if (typeof parent === 'object') {
             // exists parent, add to it
-            console.log('exists parent, add to it');
             if (parent.is_root && $RTC.order === 'desc') {
                 parent.container.prepend(comment.html);
             } else {
@@ -139,7 +138,7 @@ $RTC.getComments = function () {
         type: 'post',
         cache: false,
         success: function (response) {
-            console.debug(response);
+            // console.debug(response);
             $RTC.bookmark = response.bookmark;
             if (typeof response.max_c_id === 'string') {
                 $RTC.max_c_id = response.max_c_id;
