@@ -54,11 +54,11 @@ $RTC.get_parent_container = function (parent_id) {
     if (parent_id > 0) {
         parent_object = $RTC.get_comment_container(parent_id);
         if (typeof parent_object === 'object') {
-            if (parent_object.find('.' + $RTC.children_class).length === 0) {
+            if (parent_object.children('.' + $RTC.children_class).length === 0) {
                 // children container does not exist, create
                 parent_object.append('<' + $RTC.comment_list_tag + ' class="' + $RTC.children_class + '"></' + $RTC.comment_list_tag + '>');
             }
-            parent_container = parent_object.find('.' + $RTC.children_class);
+            parent_container = parent_object.children('.' + $RTC.children_class);
         } else {
             return false;
         }
@@ -81,6 +81,7 @@ $RTC.addComment = function (comment) {
             // me.innerHTML = comment.html;
         } else if (typeof parent === 'object') {
             // exists parent, add to it
+            console.log('exists parent, add to it');
             if (parent.is_root && $RTC.order === 'desc') {
                 parent.container.prepend(comment.html);
             } else {
@@ -138,7 +139,7 @@ $RTC.getComments = function () {
         type: 'post',
         cache: false,
         success: function (response) {
-            // console.debug(response);
+            console.debug(response);
             $RTC.bookmark = response.bookmark;
             if (typeof response.max_c_id === 'string') {
                 $RTC.max_c_id = response.max_c_id;
@@ -166,7 +167,8 @@ $RTC.getComments = function () {
             }
         },
         error: function (jqXHR, textStatus, errorThrown) {
-            console.debug(textStatus + ': ' + errorThrown);
+            //console.log('error: ' + textStatus + ': ' + errorThrown);
+            console.log('error: ' + textStatus);
             return false;
         }
     });

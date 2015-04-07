@@ -34,6 +34,10 @@ class RealTimeComments {
     private $selected_pages = array();
     private $max_c_id = 0;
 
+    private $comment_style = 'ol';
+    private $comment_walker = '';
+    private $avatar_size = '';
+
     private $default_refresh = 2000;
 
     private $refresh_options=array(
@@ -57,6 +61,7 @@ class RealTimeComments {
     private $default_avatar_size = '56';
 
     private $avatar_size_options = array (
+        '' => '',
         '34' => '34px (Twenty Fourteen)',
         '40' => '40px (Twenty Ten)',
         '44' => '44px (Twenty Twelve)',
@@ -66,6 +71,27 @@ class RealTimeComments {
         '68' => '68px (Twenty Eleven)',
         '74' => '74px (Twenty Thirteen)',
     );
+
+    private $comment_style_options = array (
+        'ol' => 'ol',
+        'ul' => 'ul',
+        'div' => 'div'
+    );
+
+    private $comment_walker_options = array (
+        '' => '',
+        'twentytwelve_comment' => 'twentytwelve_comment', 
+        'twentyeleven_comment' => 'twentyeleven_comment'
+    );
+
+    private $comment_list_el = '#comments';
+    private $comment_list_tag = 'ol';
+    private $comment_list_class = 'comment-list';
+    private $comment_tag = 'li';
+    private $comment_id_prefix = '#comment-';
+    private $children_class = 'children';
+    private $tambov = '5';
+
 
     public function __construct() {
         global $wp_version, $post;
@@ -99,10 +125,20 @@ class RealTimeComments {
         $values=get_option('rtc-settings');
 
         if(is_array($values)) {
-            if (isset($values['refresh'])) $this->refresh = $values['refresh']; else $this->refresh = $this->default_refresh;
-            if (isset($values['anim'])) $this->anim = $values['anim'];
-            if (isset($values['order'])) $this->order = $values['order'];
-            if (isset($values['avatar_size'])) $this->avatar_size = $values['avatar_size']; else $this->avatar_size = $this->default_avatar_size;
+            $this->overwrite_defaults($values, array(
+                'refresh', 
+                'order', 
+                'avatar_size', 
+                'comment_style', 
+                'comment_walker',
+                'comment_list_el', 
+                'comment_list_tag',
+                'comment_list_class',
+                'comment_tag',
+                'comment_id_prefix',
+                'children_class',
+                'tambov'
+                ));
             if (isset($values['selected_pages']) && is_array($values['selected_pages'])) $this->selected_pages = $values['selected_pages'];
             if (isset($values['post_types']) && is_array($values['post_types'])) $this->post_types = $values['post_types'];
         } 
@@ -136,6 +172,13 @@ class RealTimeComments {
         return $args;
     }
 
+    private function overwrite_defaults($values, $keys) {
+        foreach($keys as $key) {
+            if(isset($values[$key]) && isset($this->$key) && $values[$key]!=$this->$key) {
+                $this->$key = $values[$key];
+            }
+        }
+    }
 
     /* 
     ========================================================================== 
@@ -183,31 +226,53 @@ class RealTimeComments {
 
         add_settings_field('order_input', 'New comments appear', array($this, 'order_input'), 'rtc_menu', 'rtc_main_settings');
 
-        add_settings_field('select_pages', 'Use Realtime Comments for', array($this, 'select_pages'), 'rtc_menu', 'rtc_main_settings');
+        add_settings_field('select_pages', 'Use Realtime Comments for', array($this, 'pages_select'), 'rtc_menu', 'rtc_main_settings');
 
-        add_settings_field('avatar_size', 'Avatar size (not important for responsive themes)', array($this, 'avatar_size_input'), 'rtc_menu', 'rtc_main_settings'); 
+        add_settings_section('rtc_advanced_settings', 'Advanced Settings', array($this, 'create_advanced_settings_intro'), 'rtc_menu');
+
+        add_settings_field('comments_walker', 'My theme has custom comments walker function', array($this, 'comment_walker_select'), 'rtc_menu', 'rtc_advanced_settings');
+
+        add_settings_field('avatar_size', 'Avatar size (not important for responsive themes)', array($this, 'avatar_size_input'), 'rtc_menu', 'rtc_advanced_settings'); 
+
+        add_settings_field('comments_style', 'Comments style', array($this, 'comment_style_select'), 'rtc_menu', 'rtc_advanced_settings');
+
+        add_settings_field('javascript_engine', 'HTML Container definitions', array($this, 'comment_list_elements_input'), 'rtc_menu', 'rtc_advanced_settings');
     } 
 
     function create_rtc_intro() {
         echo '<p>Settings for plugin</p>';
     }
 
+    function create_advanced_settings_intro() {
+        echo '<p>Settings to use if standard settings are not good enough</p>';
+    }
+
     function validate_my_option($input) { 
         // validate entered value
         $output=array();
-        var_dump($input);
-        if(isset($input['anim'])) $output['anim']=1; else $output['anim']=0;
-        if(isset($input['refresh']) && array_key_exists(intval($input['refresh']), $this->refresh_options)) {
-            $output['refresh'] = intval($input['refresh']);
-        } else {
-            $output['refresh'] = $this->default_refresh;
-        }
-        if(isset($input['order'])) {
-            $output['order'] = $input['order'];
+        // var_dump($input);
+
+        $this->basic_validate('refresh', $this->refresh_options, $input, $output);
+        $this->basic_validate('order', false, $input, $output);
+        $this->basic_validate('avatar_size', false, $input, $output);
+        $this->basic_validate('comment_style', false, $input, $output);
+
+        if(isset($input['comment_walker_input']) && $input['comment_walker_input']) {
+            // User entry has higher precedence than selection
+            $input['comment_walker'] = $input['comment_walker_input'];
         } 
-        if(isset($input['avatar_size'])) {
-            $output['avatar_size'] = $input['avatar_size'];
+        if (isset($input['comment_walker']) && $input['comment_walker'] && function_exists($input['comment_walker'])) {
+            $this->basic_validate('comment_walker', false, $input, $output);
         }
+
+        $this->basic_validate('comment_list_el', false, $input, $output);
+        $this->basic_validate('comment_list_tag', false, $input, $output);
+        $this->basic_validate('comment_list_class', false, $input, $output);
+        $this->basic_validate('comment_tag', false, $input, $output);
+        $this->basic_validate('comment_id_prefix', false, $input, $output);
+        $this->basic_validate('children_class', false, $input, $output);
+        $this->basic_validate('tambov', false, $input, $output);
+
         if(is_array($input['post_types'])) {
             $output['post_types']=$input['post_types'];
         } else {
@@ -221,26 +286,30 @@ class RealTimeComments {
         return $output; 
     } 
 
+    private function basic_validate($key, $allowed_values, &$input, &$output) {
+        if (isset($input[$key]) && $input[$key]) {
+            if (is_array($allowed_values)) {
+                if(array_key_exists($input[$key], $allowed_values)) {
+                    $output[$key] = $input[$key];
+                }
+            } else {
+                $output[$key] = $input[$key];
+            }
+        } 
+    }
+
     function refresh_input() { 
-        echo '<select name="rtc-settings[refresh]">'."\n";
-        foreach($this->refresh_options as $value=>$text) {
-            echo '     <option value="'.$value.'" '.selected($this->refresh, $value, false).'>'.$text.'</option>'."\n";
-        }
-        echo '</select>'."\n";
+        echo $this->create_select('refresh', $this->refresh_options, ''.$this->refresh);
     } 
 
 
     function order_input() {
-        echo '<select name="rtc-settings[order]">'."\n";
-        foreach($this->order_options as $value=>$text) {
-            echo '    <option value="'.$value.'" '.selected($this->order, $value, false).'>'.$text.'</option>'."\n";
-        }
-        echo '</select>'."\n";
+        echo $this->create_select('order', $this->order_options, $this->order);
     }
 
-    function select_pages() {
-        echo '<input type="checkbox" name="rtc-settings[post_types][page]" value="1" '.checked(true, isset($this->post_types['page']), false).'>all Pages<br>';
-        echo '<input type="checkbox" name="rtc-settings[post_types][post]" value="1" '.checked(true, isset($this->post_types['post']), false).'>all Posts<br>';
+    function pages_select() {
+        echo $this->create_checkbox('[post_types][page]', isset($this->post_types['page']), '', 'all Pages');
+        echo $this->create_checkbox('[post_types][post]', isset($this->post_types['post']), '', 'all Posts');
         echo 'and/or on following pages:<br>';
         echo '<select name="rtc-settings[selected_pages][]" multiple="multiple" size="8" style="height: 14em">';
         echo Rtc_Page_Selector_Walker::get_pages_selection($this->selected_pages);
@@ -249,16 +318,58 @@ class RealTimeComments {
     }
 
     function avatar_size_input() {
-        echo '<select name="rtc-settings[avatar_size]">'."\n";
-        foreach($this->avatar_size_options as $value=>$text) {
-            echo '    <option value="'.$value.'" '.selected($this->avatar_size, $value, false).'>'.$text.'</option>'."\n";
-        }
-        echo '</select>'."\n";    
+        echo $this->create_select('avatar_size', $this->avatar_size_options, $this->avatar_size);
     }
 
-    function anim_input() { 
-        ?><input name="rtc-settings[anim]" type="checkbox" value="1" <?=($this->anim ? 'checked="1"':'') ?>><?php
-    } 
+    function comment_walker_select() {
+        if($this->comment_walker && !in_array($this->comment_walker, $this->comment_walker_options)) {
+            // add user's custom value to the list
+            $this->comment_walker_options[$this->comment_walker] = $this->comment_walker;
+          
+        } 
+        echo $this->create_select('comment_walker', $this->comment_walker_options, $this->comment_walker).' OR i\'m adding my own value ';
+        echo $this->create_input('comment_walker_input', '', '', '');
+    }
+
+    function comment_style_select() {
+        echo $this->create_select('comment_style]', $this->comment_style_options, $this->comment_style);
+    }
+
+
+    function comment_list_elements_input() {
+        echo $this->create_input('comment_list_el', $this->comment_list_el, '', 'Comment container element id. Default: #comments')."<br />\n";
+        echo $this->create_input('comment_list_tag', $this->comment_list_tag, '', 'Comment list element tag. Default: ol')."<br />\n";
+        echo $this->create_input('comment_list_class', $this->comment_list_class, '', 'Comment list element class. Default: comment-list')."<br />\n";
+        echo $this->create_input('comment_tag', $this->comment_tag, '', 'Comment item tag. Default: li')."<br />\n";
+        echo $this->create_input('comment_id_prefix', $this->comment_id_prefix, '', 'Comment item id prefix. Default: #comment-')."<br />\n";
+        echo $this->create_input('children_class', $this->children_class, '', 'Children item class. Default: children')."<br />\n";
+        echo $this->create_input('tambov', $this->tambov, '', 'Tambov constant. Default: 5')."<br />\n";
+    
+    }
+
+    private static function create_checkbox($input_field_name, $checked, $prefix = '', $comment = '') {
+        return '<label>'.$prefix.'<input type="checkbox" name="rtc-settings'.$input_field_name.'" value="1" '.checked(true, $checked, false).'>'.$comment.'</label>'."<br />\n";
+    }
+    
+    private static function create_input($input_field_name, $value, $prefix = '', $comment = '') {
+        return '<label>'.$prefix.'<input type="text" name="rtc-settings['.$input_field_name.']" value="'.htmlentities($value).'"> '.$comment.'</label>';
+    }
+
+
+    private static function create_select($select_field_name, $all_values, $selected_values, $is_multiple = false) {
+        $rv='<select name="rtc-settings['.$select_field_name.']">'."\n";
+        foreach($all_values as $key => $label) {
+            $rv.='<option value="'.$key.'" ';
+            if ((is_array($selected_values) && in_array($key, $selected_values)) ||
+                (is_string($selected_values) && $key == $selected_values)) {
+                    $rv.=' selected="1"';
+            } 
+            $rv.='>'.$label.'</option>'."\n";
+        }
+        $rv.='</select>'."\n";
+        return $rv;
+    }
+
 
 
     /* 
@@ -269,10 +380,6 @@ class RealTimeComments {
     ========================================================================== 
     */
     public function update_last_modified($comment_id) {
-        // using intentionally "time()" + tambov instead of "$this->now" variable, to save as late time as possible
-        // this is needed to not lose any comments due to parallelism
-        // not using comment own timestamp, because this is not accurate in case of comment editing
-        // 
         update_comment_meta( $comment_id, 'rtc_last_modified', time() );
     }
 
@@ -280,22 +387,12 @@ class RealTimeComments {
         global $post;
 
         if (
-            (isset($post->ID) && in_array(get_post_type($post->ID), array_keys($this->post_types))) ||
-            (isset($post->ID) && in_array($post->ID, $this->selected_pages))
+            (isset($post->ID) && is_array($this->post_types) && in_array(get_post_type($post->ID), array_keys($this->post_types))) ||
+            (isset($post->ID) && is_array($this->selected_pages) && in_array($post->ID, $this->selected_pages))
             ) {
             wp_enqueue_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, false );
 
             $page_comments = get_option('page_comments');
-            /*
-            $page = get_query_var('cpage');
-            $nextpage = intval($page) + 1;
-            $max_page = get_comment_pages_count();
-            if ( empty($max_page) )
-                $max_page = $wp_query->max_num_comment_pages;
-            if ( empty($max_page) )
-                global $wp_query;
-                $max_page = $wp_query->max_num_comment_pages;
-            */
 
             $data = array(
                 'ajaxurl' => parse_url(admin_url('admin-ajax.php'), PHP_URL_PATH),
@@ -306,13 +403,13 @@ class RealTimeComments {
                 'postid' => $post->ID,
                 'order' => ($this->order ? $this->order : get_option('comment_order')),
                 'comments_per_page' => ($page_comments ? get_option('comments_per_page') : 0),
-                'comment_list_el' => '#comments',
-                'comment_list_tag' => 'ol',
-                'comment_list_class' => null, // 'comment-list',
-                'comment_tag' => 'li',
-                'comment_id_prefix' => '#comment-',
-                'children_class' => 'children',
-                'tambov' => 5,
+                'comment_list_el' => $this->comment_list_el,
+                'comment_list_tag' => $this->comment_list_tag,
+                'comment_list_class' => $this->comment_list_class, // 'comment-list',
+                'comment_tag' => $this->comment_tag,
+                'comment_id_prefix' => $this->comment_id_prefix,
+                'children_class' => $this->children_class,
+                'tambov' => $this->tambov,
                 'is_last_page' => (($page_comments && is_numeric(get_query_var('cpage'))) ? '0' : '1'),
                 // 'max_page' => $max_page,
             );
@@ -328,35 +425,67 @@ class RealTimeComments {
     }
 
     private function get_comments_wp30($postid, $status, $bookmark, $max_id) {
-        /* needed for WP<3.5 where get_comments does not use WP_Comment_Query 
-           post_id, status, bookmark are validated before
-        
-        */
         global $wpdb;
 
-        if($status=='all') {
-            $approved="(comment_approved = '1' OR comment_approved='0')";
-        } else {
-            $approved="comment_approved='$status'";
-        }
         if ($this->mode == 'all') {
-            $comments = $wpdb->get_results( "SELECT c.*, cm.meta_value FROM $wpdb->comments c INNER JOIN $wpdb->commentmeta cm ON c.comment_ID=cm.comment_id AND cm.meta_key='rtc_last_modified' AND (cm.meta_value>=$bookmark OR cm.comment_ID>$max_id) WHERE c.comment_post_ID=$postid AND $approved ORDER BY c.comment_ID" );
+            $comments = $wpdb->get_results( "SELECT c.*, cm.meta_value FROM $wpdb->comments c INNER JOIN $wpdb->commentmeta cm ON c.comment_ID=cm.comment_id AND cm.meta_key='rtc_last_modified' AND (cm.meta_value>=$bookmark OR cm.comment_ID>$max_id) WHERE c.comment_post_ID=$postid AND c.comment_approved IN ('1', '0', 'all', 'spam', 'trash') ORDER BY c.comment_ID ASC" );
         } else {
             $comments = $wpdb->get_results( "SELECT c.*, '1' AS meta_value FROM $wpdb->comments c WHERE c.comment_post_ID=$postid AND c.comment_ID>$max_id AND $approved ORDER BY c.comment_ID" );        
         }
         return $comments;
-
     }
 
-    public function get_comments($postid, $status, $bookmark, &$new_coms) {
+    public function get_comments_wp35($postid, $status, $bookmark, $max_id) {
         global $wp_version;
+        $args=array(
+            'post_id'=>$postid,
+            'order' => 'ASC',
+            'status' => $status,    // all (= hold/0 approved/1), spam, trash
+            'meta_key' => 'rtc_last_modified',
+            'meta_value' => $bookmark,
+            'meta_compare' => '>='
+        );
 
-        $comments = $this->get_comments_wp30( $postid, $status, $bookmark, $this->max_c_id );
+        // this way works starting from 3.5
+        $comments = get_comments( $args );
+        return $comments;
+    }
+
+
+
+    public function get_comments($postid, $status, $bookmark, &$new_coms) {
+        global $wp_version, $post;
+
+        if(!isset($post)) {
+            // Some walkers like twentytwelve_comment() require $post->post_author to exist
+            $post = new stdClass();
+            $post->post_author = '';
+        }
+
+        $comments = $this->get_comments_wp30( $postid, '', $bookmark, $this->max_c_id );
+
 
         foreach($comments as $comment) {
             if($comment->meta_value) {
             $html = '';
-            $args=array('echo' => false, 'style' => 'ol', 'avatar_size' => $this->avatar_size);
+            $args=array(
+                'echo' => false,
+                'avatar_size' => $this->avatar_size,
+                //'callback' => 'twentytwelve_comment', 
+                'callback' => 'twentyeleven_comment', 
+                'style' => 'ol',
+                );
+
+            if ($this->comment_walker && function_exists($this->comment_walker)) {
+                $args['callback'] = $this->comment_walker;
+            }
+            if ($this->avatar_size) {
+                $args['avatar_size'] = $this->avatar_size;
+            }
+            if ($this->comment_style) {
+                $args['style'] = $this->comment_style;
+            }
+
             if($comment->comment_approved=='1' || $comment->comment_approved=='approve') {
                 if(version_compare($wp_version, '3.8', '<')) {
                     ob_start();
@@ -393,13 +522,11 @@ class RealTimeComments {
         }
 
         $new_coms=array();
-        foreach(array('all', 'spam', 'trash') as $status) {
-            $this->get_comments($postid, $status, $bookmark, $new_coms);
-        }
+
+        $this->get_comments($postid, '', $bookmark, $new_coms);
 
         if(!count($new_coms)) {
             die('{"status":304, "bookmark":'.$this->now.'}');    
-            // die('Ei');
         }
 
         $response=array(
