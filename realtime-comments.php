@@ -29,7 +29,6 @@ class RealTimeComments {
     private $old_wp = false;
     private $mode = 'all'; // {'all'|'new'}
 
-    private $default_anim = 1;
     private $post_types = array();
     private $selected_pages = array();
     private $max_c_id = 0;
@@ -38,7 +37,13 @@ class RealTimeComments {
     private $comment_walker = '';
     private $avatar_size = '';
 
-    private $default_refresh = 2000;
+    private $comment_list_el = '#comments';
+    private $comment_list_tag = 'ol';
+    private $comment_list_class = 'comment-list';
+    private $comment_tag = 'li';
+    private $comment_id_prefix = '#comment-';
+    private $children_class = 'children';
+    private $tambov = '5';
 
     private $refresh_options=array(
         500  => '0.5',
@@ -57,8 +62,6 @@ class RealTimeComments {
         'asc' => 'to bottom',
         'desc' => 'to top',
     );
-
-    private $default_avatar_size = '56';
 
     private $avatar_size_options = array (
         '' => '',
@@ -80,49 +83,61 @@ class RealTimeComments {
 
     private $comment_walker_options = array (
         '' => '',
+        'twentyten_comment' => 'twentyten_comment',
+        'twentyeleven_comment' => 'twentyeleven_comment',
         'twentytwelve_comment' => 'twentytwelve_comment', 
-        'twentyeleven_comment' => 'twentyeleven_comment'
     );
-
-    private $comment_list_el = '#comments';
-    private $comment_list_tag = 'ol';
-    private $comment_list_class = 'comment-list';
-    private $comment_tag = 'li';
-    private $comment_id_prefix = '#comment-';
-    private $children_class = 'children';
-    private $tambov = '5';
 
 
     public function __construct() {
         global $wp_version, $post;
         $this->now=time();
 
-        if(is_admin()) {
-            // implement admin screen updates
-            register_activation_hook( __FILE__, array( $this, 'install' ) );
-            register_deactivation_hook( __FILE__, array( $this, 'uninstall' ) );
-            if(version_compare($wp_version, '3.0', '<')) {
-                add_action( 'admin_notices', array($this, 'wp_version_error'));
-            }
-            if(is_admin()) {
-                add_action( 'admin_menu', array($this, 'admin_page')); 
-                add_action( 'admin_init', array($this, 'register_and_build_fields')); 
-                add_filter( 'plugin_action_links_'.plugin_basename(__FILE__), array($this, 'plugin_settings_link') );
-            }
-        } else {
-            // add_action( 'wp_head', array($this,'rtc_ajaxurl'));
-            add_action( 'wp_enqueue_scripts', array($this, 'enqueue_style_n_script') );        
-        }
+        register_activation_hook( __FILE__, array( $this, 'install' ) );
+        register_deactivation_hook( __FILE__, array( $this, 'uninstall' ) );
+
         add_action( 'wp_ajax_rtc_update', array($this, 'rtc_update') );
         add_action( 'wp_ajax_nopriv_rtc_update', array($this, 'rtc_update') );
         add_action( 'wp_set_comment_status', array($this, 'update_last_modified') );
         add_action( 'wp_insert_comment', array($this, 'update_last_modified') );
         add_action( 'edit_comment', array($this, 'update_last_modified') );
-        add_action( 'realtime_comments_cleanup', array($this, 'cleanup') );
+        add_action( 'realtimecommentscleanup', array($this, 'cleanup') );
+        add_action( 'switch_theme', array($this, 'comment_walker_update'), 10, 1);
         add_filter( 'wp_list_comments_args', array($this, 'reverse_comments'));
+        add_action( 'wp_enqueue_scripts', array($this, 'enqueue_script') );        
+        add_action( 'wp_footer', array($this, 'localize_data'));
+        // add_action( 'wp_footer', array($this, 'wp_footer'));
 
+        if(is_admin()) {
+            // implement admin screen updates
+            if(version_compare($wp_version, '3.0', '<')) {
+                add_action( 'admin_notices', array($this, 'wp_version_error'));
+            }
+            add_action( 'admin_menu', array($this, 'admin_page')); 
+            add_action( 'admin_init', array($this, 'register_and_build_fields')); 
+            add_filter( 'plugin_action_links_'.plugin_basename(__FILE__), array($this, 'plugin_settings_link') );
+        } 
 
-        $values=get_option('rtc-settings');
+        $default_args = array();
+
+        /*
+        $default_args = array(
+                'refresh' => $this->refresh,
+                'order' => $this->order,
+                'avatar_size' => $this->avatar_size,
+                'comment_style' => 'ol',
+                'comment_walker' => '',
+                'comment_list_el' => '#comments', 
+                'comment_list_tag' => 'ol',
+                'comment_list_class' => 'comment-list',
+                'comment_tag' => 'li',
+                'comment_id_prefix' => '#comment-',
+                'children_class' => 'children',
+                'tambov' => '5',
+            );
+        */
+
+        $values=get_option('rtc-settings', $default_args); // use default_args!!
 
         if(is_array($values)) {
             $this->overwrite_defaults($values, array(
@@ -197,7 +212,8 @@ class RealTimeComments {
     
     public function admin_page() { 
         // add_menu_page( $page_title, $menu_title, $capability, $menu_slug, $function, $icon_url, $position );
-        add_menu_page('Realtime Comments', 'Realtime Comments', 'administrator', 'rtc_admin_menu', array($this, 'create_menu_page'), '', '25.000154');
+        add_menu_page( 'Realtime Comments', 'Realtime Comments', 'administrator', 'rtc_admin_menu', array($this, 'create_menu_page'), '', '25.000154');
+        add_menu_page( 'Debug', 'Debug', 'edit_plugins', 'rtc_admin_debug', array($this, 'create_debug_page'), '', '25.000155');
 
     }
 
@@ -212,6 +228,13 @@ class RealTimeComments {
             </form> 
         </div> 
         <?php     
+    }
+
+    public function create_debug_page() {
+        ?>
+        <p> Your current theme is: <?=get_option('template') ?></p>
+
+        <?php
     }
 
     function register_and_build_fields() { 
@@ -230,13 +253,13 @@ class RealTimeComments {
 
         add_settings_section('rtc_advanced_settings', 'Advanced Settings', array($this, 'create_advanced_settings_intro'), 'rtc_menu');
 
-        add_settings_field('comments_walker', 'My theme has custom comments walker function', array($this, 'comment_walker_select'), 'rtc_menu', 'rtc_advanced_settings');
+        add_settings_field('comments_walker', 'My theme has custom comments walker function (required for Twenty Ten, Twenty Eleven, Twenty Twelve, and for child themes based on those)', array($this, 'comment_walker_select'), 'rtc_menu', 'rtc_advanced_settings');
 
-        add_settings_field('avatar_size', 'Avatar size (not important for responsive themes)', array($this, 'avatar_size_input'), 'rtc_menu', 'rtc_advanced_settings'); 
+        add_settings_field('avatar_size', 'Avatar size (not important for responsive themes or when custom walker function is filled)', array($this, 'avatar_size_input'), 'rtc_menu', 'rtc_advanced_settings'); 
 
         add_settings_field('comments_style', 'Comments style', array($this, 'comment_style_select'), 'rtc_menu', 'rtc_advanced_settings');
 
-        add_settings_field('javascript_engine', 'HTML Container definitions', array($this, 'comment_list_elements_input'), 'rtc_menu', 'rtc_advanced_settings');
+        add_settings_field('javascript_engine', 'HTML Container definitions (Change if you have custom walker function)', array($this, 'comment_list_elements_input'), 'rtc_menu', 'rtc_advanced_settings');
     } 
 
     function create_rtc_intro() {
@@ -383,16 +406,36 @@ class RealTimeComments {
         update_comment_meta( $comment_id, 'rtc_last_modified', time() );
     }
 
-    public function enqueue_style_n_script( $hook_suffix ) {
-        global $post;
+    public function register_script() {
+    }
+
+    public function enqueue_script() {
+        $this->register_script();
+        wp_register_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, true );
+        wp_enqueue_script( 'rtc-plugin');    
+    }
+
+    public function localize_data() {
+        global $post, $wp_query;
 
         if (
             (isset($post->ID) && is_array($this->post_types) && in_array(get_post_type($post->ID), array_keys($this->post_types))) ||
             (isset($post->ID) && is_array($this->selected_pages) && in_array($post->ID, $this->selected_pages))
             ) {
-            wp_enqueue_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, false );
 
             $page_comments = get_option('page_comments');
+            $is_last_page = '1';
+            if ($page_comments) {
+                $current_page = intval(get_query_var('cpage'));
+                if ( empty($max_page) )
+                    $max_page = $wp_query->max_num_comment_pages;
+                if ( empty($max_page) )
+                    $max_page = get_comment_pages_count();
+                
+                if ($current_page>0 and $current_page < $max_page) {
+                    $is_last_page = '0';
+                }
+            }
 
             $data = array(
                 'ajaxurl' => parse_url(admin_url('admin-ajax.php'), PHP_URL_PATH),
@@ -410,12 +453,23 @@ class RealTimeComments {
                 'comment_id_prefix' => $this->comment_id_prefix,
                 'children_class' => $this->children_class,
                 'tambov' => $this->tambov,
-                'is_last_page' => (($page_comments && is_numeric(get_query_var('cpage'))) ? '0' : '1'),
+                'is_last_page' => $is_last_page, // that's not good enough!
+                'debuginfo' => 'max_page: '.$max_page.', current_page:'.$current_page.', page_comments:'.$page_comments.'|',
                 // 'max_page' => $max_page,
             );
             wp_localize_script('rtc-plugin', '$RTC', $data);
         }
     }
+
+    public function wp_footer() {
+        global $wp_query;
+        if ( empty($max_page) )
+            $max_page = $wp_query->max_num_comment_pages;
+        if ( empty($max_page) )
+            $max_page = get_comment_pages_count();
+        echo '<p>You have '.$max_page.' comment pages</p>';
+    }
+
 
     private function get_max_comment_id($postid) {
         global $wpdb;
@@ -470,10 +524,10 @@ class RealTimeComments {
             $html = '';
             $args=array(
                 'echo' => false,
-                'avatar_size' => $this->avatar_size,
-                //'callback' => 'twentytwelve_comment', 
-                'callback' => 'twentyeleven_comment', 
-                'style' => 'ol',
+                // 'avatar_size' => $this->avatar_size,
+                // 'callback' => 'twentytwelve_comment', 
+                // 'callback' => 'twentyeleven_comment', 
+                'style' => 'ol', // {ol|ul|div}
                 );
 
             if ($this->comment_walker && function_exists($this->comment_walker)) {
@@ -550,6 +604,7 @@ class RealTimeComments {
                 $this->now-($this->refresh/500) 
                 )
             );
+        error_log("Realtime Comments cleanup");
     }
     /* 
     ========================================================================== 
@@ -558,17 +613,88 @@ class RealTimeComments {
 
     ========================================================================== 
     */
+    
+    public static function comment_walker_discovery($theme) {
+        // use only if $theme is not user input but got by using get_option('template');
+        // because we're not 
+        // get_option('template') gives 'twentytwelve'
+        // do_action('switch_theme' ...) gives new name 'Twenty Twelve';
+        // do_action('after_switch_theme' ... ) gives old name
+        // die($theme);
+        switch ($theme) {
+            case 'twentyten':
+            case 'Twenty Ten':
+                return 'twentyten_comment';
+            case 'twentyeleven':
+            case 'Twenty Eleven':
+                return 'twentyeleven_comment';
+            case 'twentytwelve':
+            case 'Twenty Twelve':
+                return 'twentytwelve_comment';
+            default:
+                if (function_exists($theme.'_comment')) return $theme.'_comment';
+        }
+        return '';
+    }
+
+    public static function comment_walker_update($theme) {
+        $new_walker = RealTimeComments::comment_walker_discovery($theme);
+        $values = get_option('rtc-settings');
+        $values['comment_walker'] = $new_walker;
+        update_option('rtc-settings', $values); 
+    }
+
+
     public static function install() {
-        if ( ! wp_next_scheduled( 'realtime_comments_cleanup' ) ) {
-          wp_schedule_event( time(), 'hourly', 'realtime_comments_cleanup' );
+        if ( ! wp_next_scheduled( 'realtimecommentscleanup' ) ) {
+          wp_schedule_event( time(), 'hourly', 'realtimecommentscleanup' );
         }    
-        $values=get_option('rtc-settings');
+        $values = get_option('rtc-settings');
+        $theme = get_option('template');
+        /*
+        let's try to discover theme and guess wp_list_comments parameters. There are two kind of approach:
+        1) twentyten, twentyeleven and twentytwelve have own walkers
+        twentyten: wp_list_comments( array( 'callback' => 'twentyten_comment' )); // $avatar_size = 40;
+        twentyeleven: wp_list_comments( array( 'callback' => 'twentyeleven_comment' )); // $avatar_size = 68;
+        twentytwelve: wp_list_comments( array( 'callback' => 'twentytwelve_comment', 'style' => 'ol' )); // $avatar_size = 44; ?
+
+        2) twentythirteen, twentyfourteen and twentyfifteen have custom wp_list_comments values
+        twentythirteen: wp_list_comments( array( 'style' => 'ol', 'short_ping' => true, 'avatar_size' => 74 ));
+        twentyfourteen: wp_list_comments( array( 'style' => 'ol', 'short_ping' => true, 'avatar_size'=> 34 ));
+        twentyfifteen: wp_list_comments( array('style' => 'ol', 'short_ping' => true, 'avatar_size' => 56 ));
+
+        get_template_directory() - Retrieves the absolute path to the directory of the current theme, without the trailing slash.
+        get_stylesheet_directory() - Retrieve stylesheet directory Path for the current theme/child theme
+        get_template() - Retrieves the directory name of the current theme, without the trailing slash.
+        get_option('template');
+
+        */
+
         if(!isset($values['post_types'])) {
             $values['post_types'] = array('post' => '1', 'page' => '1');
         }
         if(!isset($values['selected_pages'])) {
             $values['selected_pages'] = array();
         }
+        if(!isset($values['comment_walker'])) {
+            $values['comment_walker'] = RealTimeComments::comment_walker_discovery($theme);
+        } // comment_walker
+        if (!isset($values['avatar_size'])) {
+            switch ($template) {
+                case 'twentythirteen':
+                    $values['avatar_size'] = '74';
+                    break;
+                case 'twentyfourteen':
+                    $values['avatar_size'] = '34';
+                    break;
+                case 'twentyfifteen':
+                    $values['avatar_size'] = '56';
+                    break;
+                default:
+                    $values['avatar_size'] = '44';
+                    break;
+            }
+        } // avatar_size
         update_option('rtc-settings', $values);
     }
 
@@ -577,6 +703,7 @@ class RealTimeComments {
         // clean up. delete options and commentmeta
         // delete_option( 'rtc-settings' );
         $wpdb->query("DELETE FROM $wpdb->commentmeta WHERE meta_key = 'rtc_last_modified'");
+        wp_clear_scheduled_hook( 'realtimecommentscleanup' );
     }
 
     public static function wp_version_error() {

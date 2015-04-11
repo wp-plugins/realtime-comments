@@ -138,7 +138,7 @@ $RTC.getComments = function () {
         type: 'post',
         cache: false,
         success: function (response) {
-            // console.debug(response);
+            console.debug(response);
             $RTC.bookmark = response.bookmark;
             if (typeof response.max_c_id === 'string') {
                 $RTC.max_c_id = response.max_c_id;
@@ -177,6 +177,9 @@ $RTC.getComments = function () {
 $RTC.init = function () {
     var success = true, interval;
     console.log('Is last page ' + $RTC.is_last_page);
+    if ($RTC.debuginfo) {
+        console.debug('Debug: '+$RTC.debuginfo);
+    }
     $RTC.discoverTheme();
     $RTC.refresh_interval = parseInt($RTC.refresh_interval, 10);
     console.log('This page has ' + $RTC.countComments() + ' toplevel comments');
