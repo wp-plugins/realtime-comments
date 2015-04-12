@@ -3,24 +3,39 @@
 /*global jQuery */
 /*global console */
 
-$RTC.discoverTheme = function () {
+$RTC.debug = function (txt) {
+    if (typeof $RTC.debuginfo === 'string') {
+        console.debug(txt);
+    }
+}
+
+$RTC.getAutoTheme = function () {
+    if ($RTC.comment_list_class === 'commentlist') {
+        // theme based on twentyten
+        $RTC.comment_list_tag = 'ol';
+        $RTC.comment_tag = 'li';
+        $RTC.comment_id_prefix = '#li-comment-';
+        $RTC.children_class = 'children';
+    } else {
+        // theme based on twentythirteen or newer themes
+        $RTC.comment_list_tag = 'ul';
+        $RTC.comment_tag = 'li';
+        $RTC.comment_id_prefix = '#comment-';
+        $RTC.children_class = 'children';
+    }
+}
+
+$RTC.getCommentListContainer = function () {
     var parent_found = false;
-    if (typeof $RTC.comment_list_class !== 'string') {
-        if (jQuery($RTC.comment_list_el + ' .comment-list').length > 0) {
-            // theme based on twentyeleven or newer themes
-            $RTC.comment_list_class = 'comment-list';
-            $RTC.comment_tag = 'li';
-            $RTC.comment_id_prefix = '#comment-';
-            parent_found = true;
-        } else if (jQuery($RTC.comment_list_el +' .commentlist').length > 0) {
-            // theme based on twentyten
-            $RTC.comment_list_class = 'commentlist';
-            $RTC.comment_list_tag = 'ol';
-            $RTC.comment_tag = 'li';
-            $RTC.comment_id_prefix = '#li-comment-';
-            parent_found = true;
-        }
-    } else if (jQuery($RTC.comment_list_el).children('.' + $RTC.comment_list_class).length > 0) {
+    if (typeof $RTC.comment_list_class === 'string' && (jQuery($RTC.comment_list_el + ' .' + $RTC.comment_list_class).length > 0)) {
+        parent_found = true;
+    } else if (jQuery($RTC.comment_list_el +' .commentlist').length > 0) {
+        $RTC.comment_list_class = 'commentlist';
+        $RTC.getAutoTheme();
+        parent_found = true;
+    } else if (jQuery($RTC.comment_list_el + ' .comment-list').length > 0) {
+        $RTC.comment_list_class = 'comment-list';
+        $RTC.getAutoTheme();
         parent_found = true;
     }
 
@@ -28,14 +43,15 @@ $RTC.discoverTheme = function () {
         // create root container
         if (typeof $RTC.comment_list_class !== 'string') {
             $RTC.comment_list_class = 'comment-list';
+            $RTC.getAutoTheme();
         }
         jQuery($RTC.comment_list_el).prepend('<' + $RTC.comment_list_tag + ' class="' + $RTC.comment_list_class + '"></' + $RTC.comment_list_tag + '>');
     }
     $RTC.container = jQuery($RTC.comment_list_el + ' .' + $RTC.comment_list_class);
-    console.log('Comment-list container is ' + $RTC.container);
-}
+    $RTC.debug('Comment-list container is ' + $RTC.container);
+};
 
-$RTC.get_comment_container = function (comment_id) {
+$RTC.getCommentContainer = function (comment_id) {
     // returns 'li' type of object, false if not found
     // purpose: modify, append or remove 'li' object content
     var container = false;
@@ -45,14 +61,14 @@ $RTC.get_comment_container = function (comment_id) {
     return container;
 };
 
-$RTC.get_parent_container = function (parent_id) {
+$RTC.getParentContainer = function (parent_id) {
     // returns 'ol' type of container object, additionally 'is_root' parameter
     // purpose: get container where to add {append|prepend} child nodes (type of 'li')
     var parent_object = false,
         parent_container = false,
         is_root = false;
     if (parent_id > 0) {
-        parent_object = $RTC.get_comment_container(parent_id);
+        parent_object = $RTC.getCommentContainer(parent_id);
         if (typeof parent_object === 'object') {
             if (parent_object.children('.' + $RTC.children_class).length === 0) {
                 // children container does not exist, create
@@ -73,8 +89,8 @@ $RTC.get_parent_container = function (parent_id) {
 
 
 $RTC.addComment = function (comment) {
-    var parent = $RTC.get_parent_container(comment.parent),
-        me = $RTC.get_comment_container(comment.id);
+    var parent = $RTC.getParentContainer(comment.parent),
+        me = $RTC.getCommentContainer(comment.id);
     if (comment.approved === '1' || comment.approved === 'approve') {
         if (me) {
             // vaja teha: it already exists, update article content
@@ -93,7 +109,7 @@ $RTC.addComment = function (comment) {
             me.remove();
         }
     } else {
-        console.log('Error: ' + comment.id + ' approved is ' + comment.approved + '?');
+        $RTC.debug('Error: ' + comment.id + ' approved is ' + comment.approved + '?');
     }
 };
 
@@ -108,7 +124,7 @@ $RTC.removeOldestComment = function () {
     } else {
         jQuery($RTC.container).children($RTC.comment_tag).first().remove();
     }
-    console.log('removed one oldest comment');
+    $RTC.debug('removed one oldest comment');
 }
 
 $RTC.paginate = function () {
@@ -116,7 +132,7 @@ $RTC.paginate = function () {
     // tambov is here to avoid posting user to land to white page with only one comment
     // not sure if needed
     if ($RTC.comments_per_page > 0) {
-        for (i = 0; i < (numcomments - $RTC.tambov - $RTC.comments_per_page); i++) {
+        for (i = 0; i < (numcomments - $RTC.comments_per_page); i++) {
             $RTC.removeOldestComment();
         }
     }
@@ -127,7 +143,8 @@ $RTC.getComments = function () {
         'action': 'rtc_update',
         'rtc_bookmark': $RTC.bookmark,
         'postid': $RTC.postid,
-        'max_c_id': $RTC.max_c_id
+        'max_c_id': $RTC.max_c_id,
+        'nonce': $RTC.nonce
     },
         i;
     jQuery.ajax({
@@ -138,7 +155,7 @@ $RTC.getComments = function () {
         type: 'post',
         cache: false,
         success: function (response) {
-            console.debug(response);
+            $RTC.debug(response);
             $RTC.bookmark = response.bookmark;
             if (typeof response.max_c_id === 'string') {
                 $RTC.max_c_id = response.max_c_id;
@@ -167,7 +184,7 @@ $RTC.getComments = function () {
         },
         error: function (jqXHR, textStatus, errorThrown) {
             //console.log('error: ' + textStatus + ': ' + errorThrown);
-            console.log('error: ' + textStatus);
+            $RTC.debug('error: ' + textStatus);
             return false;
         }
     });
@@ -176,20 +193,18 @@ $RTC.getComments = function () {
 
 $RTC.init = function () {
     var success = true, interval;
-    console.log('Is last page ' + $RTC.is_last_page);
-    if ($RTC.debuginfo) {
-        console.debug('Debug: '+$RTC.debuginfo);
-    }
-    $RTC.discoverTheme();
+    $RTC.debug('Is last page ' + $RTC.is_last_page);
+    $RTC.debug('Debug: '+$RTC.debuginfo);
+    $RTC.getCommentListContainer();
     $RTC.refresh_interval = parseInt($RTC.refresh_interval, 10);
-    console.log('This page has ' + $RTC.countComments() + ' toplevel comments');
+    $RTC.debug('This page has ' + $RTC.countComments() + ' toplevel comments');
     // new toplevel comments must be added only to "newest comments" page
     if ($RTC.refresh_interval > 100) {
         interval = setInterval(function () {
             success = $RTC.getComments();
             if (!success) {
                 clearInterval(interval);
-                console.debug('stop');
+                $RTC.debug('stop');
             }
         }, $RTC.refresh_interval);
     }
