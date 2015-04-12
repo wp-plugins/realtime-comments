@@ -672,7 +672,7 @@ if (typeof $RTC === 'object') $RTC.is_last_page = '<?= $is_last_page ?>';
                 $this->now-($this->refresh/500) 
                 )
             );
-        error_log("Realtime Comments cleanup");
+        // error_log("Realtime Comments cleanup");
     }
     /* 
     ========================================================================== 
