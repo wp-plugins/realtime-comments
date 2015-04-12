@@ -228,7 +228,6 @@ class RealTimeComments {
         ?> 
         <div id="wp_plugin_realtime_comments"> 
         <h2>Realtime Comments</h2>
-        <div class="icon32" id="icon-tools"> <br /> </div> 
             <form method="post" action="options.php" enctype="multipart/form-data"> 
             <?php settings_fields('rtc_settings'); ?> 
             <ul id="ee_tabs">
