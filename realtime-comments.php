@@ -109,8 +109,8 @@ class RealTimeComments {
         add_filter( 'wp_list_comments_args', array($this, 'reverse_comments'));
         add_action( 'wp_enqueue_scripts', array($this, 'enqueue_script') );
         add_action( 'admin_enqueue_scripts', array($this, 'enqueue_admin_style_n_script') );
-        add_action( 'wp_footer', array($this, 'localize_data'));
-        // add_action( 'wp_footer', array($this, 'wp_footer'));
+        // add_action( 'wp_footer', array($this, 'localize_data'));
+        add_action( 'wp_footer', array($this, 'wp_footer'));
 
         if(is_admin()) {
             // implement admin screen updates
@@ -448,16 +448,7 @@ class RealTimeComments {
         update_comment_meta( $comment_id, 'rtc_last_modified', time() );
     }
 
-    public function register_script() {
-    }
-
     public function enqueue_script() {
-        $this->register_script();
-        wp_register_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, true );
-        wp_enqueue_script( 'rtc-plugin');    
-    }
-
-    public function localize_data() {
         global $post, $wp_query;
 
         if (
@@ -465,7 +456,11 @@ class RealTimeComments {
             (isset($post->ID) && is_array($this->selected_pages) && in_array($post->ID, $this->selected_pages))
             ) {
 
+            wp_register_script( 'rtc-plugin', plugins_url('js/script.js', __FILE__ ), array('jquery'), REALTIMECOMMENTS_VERSION, false );
+            wp_enqueue_script( 'rtc-plugin'); 
+
             $page_comments = get_option('page_comments');
+            /*
             $is_last_page = '1';
             if ($page_comments) {
                 $current_page = intval(get_query_var('cpage'));
@@ -478,6 +473,7 @@ class RealTimeComments {
                     $is_last_page = '0';
                 }
             }
+            */
 
             $data = array(
                 'ajaxurl' => parse_url(admin_url('admin-ajax.php'), PHP_URL_PATH),
@@ -488,7 +484,7 @@ class RealTimeComments {
                 'postid' => $post->ID,
                 'order' => ($this->order ? $this->order : get_option('comment_order')),
                 'comments_per_page' => ($page_comments ? get_option('comments_per_page') : 0),
-                'is_last_page' => $is_last_page, // that's not good enough!
+                'is_last_page' => '0', 
                 'comment_list_el' => '#comments',
             );
 
@@ -511,11 +507,27 @@ class RealTimeComments {
 
     public function wp_footer() {
         global $wp_query;
-        if ( empty($max_page) )
-            $max_page = $wp_query->max_num_comment_pages;
-        if ( empty($max_page) )
-            $max_page = get_comment_pages_count();
-        echo '<p>You have '.$max_page.' comment pages</p>';
+        $page_comments = get_option('page_comments');
+        $is_last_page = '1';
+        if ($page_comments) {
+            $current_page = intval(get_query_var('cpage'));
+            if ( empty($max_page) )
+                $max_page = $wp_query->max_num_comment_pages;
+            if ( empty($max_page) )
+                $max_page = get_comment_pages_count();
+            
+            if ($current_page>0 and $current_page < $max_page) {
+                $is_last_page = '0';
+            }
+        }
+        // echo '<p>You have '.$max_page.' comment pages and current one is '.$current_page.'</p>';
+        ?>
+<script type='text/javascript'>
+/* <![CDATA[ */
+if (typeof $RTC === 'object') $RTC.is_last_page = '<?= $is_last_page ?>';
+/* ]]> */
+</script>
+        <?php
     }
 
 
