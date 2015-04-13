@@ -630,7 +630,6 @@ if (typeof $RTC === 'object') $RTC.is_last_page = '<?= $is_last_page ?>';
             die ('{"status":500,"msg":"Session is expired"}');
         }
         
-
         $bookmark = intval( $_POST['rtc_bookmark'] );
         $postid = intval( $_POST['postid'] );
         $max_c_id = intval($_POST['max_c_id']);
