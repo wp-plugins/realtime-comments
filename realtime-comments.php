@@ -489,7 +489,7 @@ class RealTimeComments {
             );
 
             if (isset($this->debuginfo)) {
-                $data['debuginfo'] = 'max_page: '.$max_page.', current_page:'.$current_page.', page_comments:'.$page_comments.'.';
+                $data['debuginfo'] = 'page_comments:'.$page_comments.'.';
             }
 
             if (isset($this->advanced_user)) {
