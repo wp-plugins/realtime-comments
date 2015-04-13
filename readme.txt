@@ -33,13 +33,13 @@ Starting from version 0.7 it has pagination support. New top-level comments will
 == Changelog ==
 
 = 0.7 =
-Added: option to change discussion ordering for selected pages
-Added: possible to change avatar size (for non-responsive themes)
-Added: pagination support
-Added: support for custom comments walker function
-Added: custom config values for theme developers
-Bugfix: first comment appearing improved
-Bugfix: improved appearance of comments
+* Added: option to change discussion ordering for selected pages
+* Added: possible to change avatar size (for non-responsive themes)
+* Added: pagination support
+* Added: support for custom comments walker function
+* Added: custom config values for theme developers
+* Fixed: first comment appearing improved
+* Fixed: improved appearance of comments
 
 = 0.6 =
 * Added: option to select pages, where Realtime Comments will be activated
