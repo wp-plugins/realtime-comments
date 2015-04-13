@@ -524,7 +524,7 @@ class RealTimeComments {
         ?>
 <script type='text/javascript'>
 /* <![CDATA[ */
-if (typeof $RTC === 'object') $RTC.is_last_page = '<?= $is_last_page ?>';
+if (typeof $RTC === 'object') $RTC.is_last_page = '<?php echo $is_last_page; ?>';
 /* ]]> */
 </script>
         <?php
